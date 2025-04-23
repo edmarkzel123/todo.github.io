@@ -1,25 +1,41 @@
 import { useState, useEffect } from "react";
 
 export default function TodoList() {
-  const [tasks, setTasks] = useState([
-    { text: "Learn React", completed: false },
-    { text: "Build a project", completed: false },
-  ]);
+  const API_URL = "http://localhost/my-todo-api/api.php";
+
+  const [tasks, setTasks] = useState([]);
   const [task, setTask] = useState("");
   const [editingIndex, setEditingIndex] = useState(null);
   const [editedText, setEditedText] = useState("");
   const [filter, setFilter] = useState("all");
 
+  // Load tasks from API
+  useEffect(() => {
+    fetch(API_URL)
+      .then(res => res.json())
+      .then(data => setTasks(data));
+  }, []);
+
   // Add Task
   const addTask = () => {
     if (task.trim() === "") return;
-    setTasks([...tasks, { text: task, completed: false }]);
-    setTask("");
+
+    fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: task })
+    })
+      .then(res => res.json())
+      .then(newTask => {
+        setTasks(prev => [...prev, newTask]);
+        setTask("");
+      });
   };
 
   // Remove Task
-  const removeTask = (index) => {
-    setTasks(tasks.filter((_, i) => i !== index));
+  const removeTask = (id) => {
+    fetch(`${API_URL}?id=${id}`, { method: "DELETE" })
+      .then(() => setTasks(prev => prev.filter(task => task.id !== id)));
   };
 
   // Edit Task
@@ -29,17 +45,37 @@ export default function TodoList() {
   };
 
   const saveEdit = (index) => {
-    const updatedTasks = [...tasks];
-    updatedTasks[index].text = editedText;
-    setTasks(updatedTasks);
-    setEditingIndex(null);
+    const taskToEdit = tasks[index];
+    fetch(`${API_URL}?id=${taskToEdit.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: editedText, completed: taskToEdit.completed })
+    })
+      .then(res => res.json())
+      .then(updatedTask => {
+        const updatedTasks = [...tasks];
+        updatedTasks[index].text = updatedTask.text;
+        setTasks(updatedTasks);
+        setEditingIndex(null);
+      });
   };
 
   // Mark as Completed
   const toggleComplete = (index) => {
-    const updatedTasks = [...tasks];
-    updatedTasks[index].completed = !updatedTasks[index].completed;
-    setTasks(updatedTasks);
+    const taskToUpdate = tasks[index];
+    const updatedTask = { ...taskToUpdate, completed: !taskToUpdate.completed };
+
+    fetch(`${API_URL}?id=${taskToUpdate.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updatedTask)
+    })
+      .then(res => res.json())
+      .then(() => {
+        const updatedTasks = [...tasks];
+        updatedTasks[index] = updatedTask;
+        setTasks(updatedTasks);
+      });
   };
 
   // Filter Tasks
@@ -59,7 +95,7 @@ export default function TodoList() {
 
       <ul>
         {filteredTasks.map((task, index) => (
-          <li key={index} className={task.completed ? "completed" : ""}>
+          <li key={task.id} className={task.completed ? "completed" : ""}>
             <input type="checkbox" checked={task.completed} onChange={() => toggleComplete(index)} />
             {editingIndex === index ? (
               <>
@@ -74,7 +110,7 @@ export default function TodoList() {
               <>
                 {task.text}
                 <button onClick={() => editTask(index)}>Edit</button>
-                <button onClick={() => removeTask(index)}>❌</button>
+                <button onClick={() => removeTask(task.id)}>❌</button>
               </>
             )}
           </li>
